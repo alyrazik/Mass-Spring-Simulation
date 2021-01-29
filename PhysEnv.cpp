@@ -21,6 +21,7 @@ static char THIS_FILE[] = __FILE__;
 
 #pragma warning (disable:4244)      // I NEED TO CONVERT FROM DOUBLE TO FLOAT
 
+
 /////////////////////////////////////////////////////////////////////////////
 // CPhysEnv
 
@@ -755,6 +756,13 @@ void CPhysEnv::EulerIntegrate(float DeltaTime)
 	// IntegrateSysOverTime(initial, source, target, deltaTime)
 	// Read through the implementation of the function (implemented in PhysEnv.cpp) and make sure you understand how it works
 	IntegrateSysOverTime(cur, cur, m_TargetSys, DeltaTime);
+	// let's save the system state
+	
+	vector<tParticle> temp(m_ParticleCnt);
+	memcpy(temp.data(), m_TargetSys, m_ParticleCnt * sizeof(tParticle));
+	states.push_back(temp);
+
+	
 }
 
 void CPhysEnv::MidPointIntegrate( float DeltaTime)
@@ -772,6 +780,12 @@ void CPhysEnv::MidPointIntegrate( float DeltaTime)
 
 	// Use these derivatives to compute the state at the end of the interval
 	IntegrateSysOverTime(cur, temp, m_TargetSys, DeltaTime);
+
+	// let's save the system state
+
+	vector<tParticle> temp_(m_ParticleCnt);
+	memcpy(temp_.data(), m_TargetSys, m_ParticleCnt * sizeof(tParticle));
+	states.push_back(temp_);
 }
 
 /* TODO
@@ -792,14 +806,141 @@ void CPhysEnv::RK4Integrate( float DeltaTime)
 	// TODO
 }
 
-void CPhysEnv::RK5Integrate(float DeltaTime)
+
+
+
+void CPhysEnv::RK4AdaptiveIntegrate(float DeltaTime)
 {
-	// TODO
+	//calculate error estimate. 
+	//1. calculate system output with step size h and step size h/2 (use RK4 function).
+	//2. calculate the error by subtracting the two systems and save into a new temp system.
+	//3. update the system output of h/2 by the calculated correction factor (for positions) and save to target.
+	
+	DeltaTime = DeltaTime * 2.0f; 
+
+	System cur(m_CurrentSys, m_ParticleCnt);
+	System k2(m_ParticleCnt);
+	System k3(m_ParticleCnt);
+	System k4(m_ParticleCnt);
+	System k5(m_ParticleCnt);
+	System k6(m_ParticleCnt);
+	System temp1(m_ParticleCnt);
+	System temp2(m_ParticleCnt);
+
+
+	// Compute the state of the system at k2 and evaluate derivatives at k2
+	IntegrateSysOverTime(cur, cur, k2, DeltaTime/4.0f);
+	ComputeForces(k2);
+		
+	IntegrateSysOverTime(cur, k2, k3, DeltaTime / 4.0f);
+	ComputeForces(k3);
+
+	IntegrateSysOverTime(cur, k3, k4, DeltaTime / 2.0f);
+	ComputeForces(k4);
+
+	IntegrateSysOverTime(cur, k4, k5, 0.75f * DeltaTime);
+	ComputeForces(k5);
+
+	IntegrateSysOverTime(cur, k5, k6, DeltaTime);
+	ComputeForces(k6);
+	
+
+	System final_slope(m_ParticleCnt);
+	//final_slope = (k2);
+	
+	final_slope = (cur * 7.0f +  k3 * 32.0f + k4 * 12.0f + k5 *32.0f + k6 * 7.0f) / 90.0;
+
+
+	// Use these derivatives to compute the state at the end of the interval
+	IntegrateSysOverTime(cur, final_slope, temp1, DeltaTime);
+
+
+	/// re calculate for half step (which is the original full step)
+
+	float hDeltaTime = DeltaTime / 2.0f;
+
+	IntegrateSysOverTime(cur, cur, k2, hDeltaTime / 4.0f);
+	ComputeForces(k2);
+
+	IntegrateSysOverTime(cur, k2, k3, hDeltaTime / 4.0f);
+	ComputeForces(k3);
+
+	IntegrateSysOverTime(cur, k3, k4, hDeltaTime / 2.0f);
+	ComputeForces(k4);
+
+	IntegrateSysOverTime(cur, k4, k5, 0.75f * hDeltaTime);
+	ComputeForces(k5);
+
+	IntegrateSysOverTime(cur, k5, k6, hDeltaTime);
+	ComputeForces(k6);
+
+
+	//System final_slope(m_ParticleCnt);
+	//final_slope = (k2);
+
+	final_slope = (cur * 7.0f + k3 * 32.0f + k4 * 12.0f + k5 * 32.0f + k6 * 7.0f) / 90.0;
+
+
+	// Use these derivatives to compute the state at the end of the interval
+	IntegrateSysOverTime(cur, final_slope, temp2, DeltaTime);
+
+	System error(m_ParticleCnt);
+	error = temp1 - temp2; 
+
+	//let's get an improved accuracy using the error
+
+	m_TargetSys = temp2 + error; 
+	// let's save the system state
+
+	vector<tParticle> temp_(m_ParticleCnt);
+	memcpy(temp_.data(), m_TargetSys, m_ParticleCnt * sizeof(tParticle));
+	states.push_back(temp_);
+
 }
 
-void CPhysEnv::RK4AdaptiveIntegrate( float DeltaTime)  
+
+
+
+void CPhysEnv::RK5Integrate( float DeltaTime)
 {
-	// TODO
+	System cur(m_CurrentSys, m_ParticleCnt);
+	System k2(m_ParticleCnt);
+	System k3(m_ParticleCnt);
+	System k4(m_ParticleCnt);
+	System k5(m_ParticleCnt);
+	System k6(m_ParticleCnt);
+
+	// Compute the state of the system at k2 and evaluate derivatives at k2
+	IntegrateSysOverTime(cur, cur, k2, DeltaTime / 4.0f);
+	ComputeForces(k2);
+
+	IntegrateSysOverTime(cur, k2, k3, DeltaTime / 4.0f);
+	ComputeForces(k3);
+
+	IntegrateSysOverTime(cur, k3, k4, DeltaTime / 2.0f);
+	ComputeForces(k4);
+
+	IntegrateSysOverTime(cur, k4, k5, 0.75f * DeltaTime);
+	ComputeForces(k5);
+
+	IntegrateSysOverTime(cur, k5, k6, DeltaTime);
+	ComputeForces(k6);
+
+
+	System final_slope(m_ParticleCnt);
+	//final_slope = (k2);
+
+	final_slope = (cur * 7.0f + k3 * 32.0f + k4 * 12.0f + k5 * 32.0f + k6 * 7.0f) / 90.0;
+
+
+	// Use these derivatives to compute the state at the end of the interval
+	IntegrateSysOverTime(cur, final_slope, m_TargetSys, DeltaTime);
+
+	// let's save the system state
+
+	vector<tParticle> temp_(m_ParticleCnt);
+	memcpy(temp_.data(), m_TargetSys, m_ParticleCnt * sizeof(tParticle));
+	states.push_back(temp_);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -951,9 +1092,9 @@ void CPhysEnv::Simulate(float DeltaTime, BOOL running)
 				case RK4_INTEGRATOR:
 					RK4Integrate(TargetTime-CurrentTime);
 					break;
-				// case RK5_INTEGRATOR:
-					//RK5Integrate(TargetTime - CurrentTime);
-					// break;
+				case RK5_INTEGRATOR:
+					RK5Integrate(TargetTime - CurrentTime);
+					break;
 				case RK4_ADAPTIVE_INTEGRATOR:
 					RK4AdaptiveIntegrate(TargetTime-CurrentTime);
 					break;
@@ -968,11 +1109,11 @@ void CPhysEnv::Simulate(float DeltaTime, BOOL running)
 			// TELL THE SYSTEM I AM LOOKING FOR A COLLISION SO IT WILL USE EULER
 			m_CollisionRootFinding = TRUE;
             // we simulated too far, so subdivide time and try again
-            TargetTime = (CurrentTime + TargetTime) / 2.0f;
-
+            TargetTime = (CurrentTime + TargetTime) / 2.0f; // commented out by Aly
+			
             // blow up if we aren't moving forward each step, which is
             // probably caused by interpenetration at the frame start
-            assert(fabs(TargetTime - CurrentTime) > EPSILON);
+            assert(fabs(TargetTime - CurrentTime) > EPSILON); 
         }
         else
         {

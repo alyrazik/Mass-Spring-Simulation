@@ -7,9 +7,12 @@
 // PhysEnv.h : header file
 //
 #include "MathDefs.h"
+#include <vector>
 
-#define EPSILON  0.00001f				// ERROR TERM
+
+#define EPSILON  0 //0.00001f				// ERROR TERM
 #define DEFAULT_DAMPING		0.002f
+#define N_STATES 1000
 
 enum tCollisionTypes
 {
@@ -82,6 +85,9 @@ struct tSpring
 #include <fstream>
 using namespace std;
 
+//#include "System.h" // I am not sure if it works since system.h includes this file as well. 
+//class System;
+
 class CPhysEnv
 {
 // Construction
@@ -141,6 +147,9 @@ private:
 	tCollisionSphere	*m_Sphere;
 	int					m_SphereCnt;
 	int t = 0;
+	//add a member state varia ble to hold the systems state 
+	vector< vector<tParticle> > states;		//hold system states thru a trajectory up to a max number defined by N_STATES .
+
 // Operations
 private:
 	inline void	IntegrateSysOverTime(tParticle *initial,tParticle *source, tParticle *target, float deltaTime);
